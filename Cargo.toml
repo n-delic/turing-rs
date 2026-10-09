@@ -1,0 +1,26 @@
+[package]
+name = "turing-rs"
+version = "0.2.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Standalone system monitor for the Turing Smart Screen 3.5\" (rev A)"
+repository = "https://github.com/n-delic/turing-rs"
+
+[dependencies]
+serialport = "4"
+sysinfo = "0.33"
+image = { version = "0.25", default-features = false, features = ["png"] }
+imageproc = "0.25"
+ab_glyph = "0.2"
+chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+serde_json = "1"
+serde_yaml = "0.9"
+ureq = { version = "2", default-features = false, features = ["json"] }
+dirs = "5"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

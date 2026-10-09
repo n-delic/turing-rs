@@ -1,0 +1,15 @@
+# Copy to ~/.config/turing-rs/config.toml (Linux) or %APPDATA%\turing-rs\config.toml (Windows),
+# or pass a path as the first argument. Every key is optional.
+
+# port = "/dev/ttyACM0"        # or "COM3"; auto-detected when omitted
+brightness = 50                 # 0-100
+interval_ms = 1000
+# net_interface = "wlp0s20f3"   # auto: busiest physical interface
+# disk = "/"                    # mount point; "C:\\" on Windows
+# lhm_url = "http://localhost:8085/data.json"   # LibreHardwareMonitor web server (Windows default)
+accent = "#4fc3f7"              # built-in dashboard colour
+
+# Python-project theme (folder containing theme.yaml). Omit for the built-in dashboard.
+# Get more from https://github.com/mathoudebine/turing-smart-screen-python/tree/main/res/themes
+# theme = "~/.config/turing-rs/themes/LandscapeMagicBlue"
+# fonts_dir = "~/.config/turing-rs/fonts"   # the repo's res/fonts; auto-detected next to the theme or here

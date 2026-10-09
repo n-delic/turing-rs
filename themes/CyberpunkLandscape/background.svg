@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320">
+  <rect width="480" height="320" fill="#000"/>
+  <defs>
+    <!-- cyberpunk panel: chamfered top-right and bottom-left corners -->
+    <path id="box" d="M0 0 H213 L225 12 V88 H12 L0 76 Z" fill="none" stroke="#ffef08" stroke-width="2"/>
+    <path id="tag" d="M0 0 H34 V14 H4 L0 10 Z" fill="#ffef08"/>
+  </defs>
+  <!-- header rule under the logo, and the right-side bracket like the original -->
+  <path d="M10 62 H300 L310 56 H470" fill="none" stroke="#ffef08" stroke-width="2"/>
+  <path d="M470 56 V300 L452 318 H30" fill="none" stroke="#ffef08" stroke-width="2"/>
+  <!-- four panels -->
+  <use href="#box" x="10" y="70"/>
+  <use href="#box" x="245" y="70"/>
+  <use href="#box" x="10" y="170"/>
+  <use href="#box" x="245" y="170"/>
+  <!-- name tags, bottom-right of each panel (label text is drawn by the theme) -->
+  <use href="#tag" x="200" y="154"/>
+  <use href="#tag" x="435" y="154"/>
+  <use href="#tag" x="200" y="254"/>
+  <use href="#tag" x="435" y="254"/>
+  <!-- dotted deco strip like the original header -->
+  <g fill="#b5a200">
+    <rect x="320" y="46" width="3" height="3"/><rect x="328" y="46" width="3" height="3"/><rect x="336" y="46" width="3" height="3"/>
+    <rect x="344" y="46" width="3" height="3"/><rect x="352" y="46" width="3" height="3"/><rect x="360" y="46" width="3" height="3"/>
+  </g>
+</svg>

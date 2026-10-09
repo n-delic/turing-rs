@@ -1,0 +1,81 @@
+---
+# Landscape remake of the "Cyberpunk" 3.5" theme (same font/colours/logo), 480x320.
+author: "turing-rs"
+
+display:
+  DISPLAY_ORIENTATION: landscape
+  DISPLAY_RGB_LED: 255, 255, 0
+
+static_images:
+  BACKGROUND:
+    PATH: background.png
+    X: 0
+    Y: 0
+    WIDTH: 480
+    HEIGHT: 320
+  LOGO:
+    PATH: logo.png
+    X: 8
+    Y: 263
+    WIDTH: 150
+    HEIGHT: 44
+
+static_text:
+  CPU_TAG:  { TEXT: CPU, X: 203, Y: 156, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 11, FONT_COLOR: "0, 0, 0", BACKGROUND_IMAGE: background.png }
+  RAM_TAG:  { TEXT: RAM, X: 438, Y: 156, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 11, FONT_COLOR: "0, 0, 0", BACKGROUND_IMAGE: background.png }
+  GPU_TAG:  { TEXT: GPU, X: 203, Y: 256, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 11, FONT_COLOR: "0, 0, 0", BACKGROUND_IMAGE: background.png }
+  DISK_TAG: { TEXT: DSK, X: 438, Y: 256, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 11, FONT_COLOR: "0, 0, 0", BACKGROUND_IMAGE: background.png }
+  NET_UL:   { TEXT: UL, X: 170, Y: 284, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 15, FONT_COLOR: "255, 239, 8", BACKGROUND_IMAGE: background.png }
+  NET_DL:   { TEXT: DL, X: 326, Y: 284, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 15, FONT_COLOR: "255, 239, 8", BACKGROUND_IMAGE: background.png }
+
+STATS:
+  CPU:
+    PERCENTAGE:
+      INTERVAL: 1
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 24, Y: 92, ANCHOR: lt, MIN_SIZE: 0, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 28, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+      GRAPH: { SHOW: True, X: 24, Y: 134, WIDTH: 197, HEIGHT: 10, MIN_VALUE: 0, MAX_VALUE: 100, BAR_COLOR: "2, 216, 243", BAR_OUTLINE: True, BACKGROUND_IMAGE: background.png }
+    FREQUENCY:
+      INTERVAL: 5
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 222, Y: 82, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "255, 239, 8", BACKGROUND_IMAGE: background.png }
+    TEMPERATURE:
+      INTERVAL: 5
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 222, Y: 104, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+  GPU:
+    INTERVAL: 1
+    PERCENTAGE:
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 24, Y: 192, ANCHOR: lt, MIN_SIZE: 0, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 28, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+      GRAPH: { SHOW: True, X: 24, Y: 234, WIDTH: 197, HEIGHT: 10, MIN_VALUE: 0, MAX_VALUE: 100, BAR_COLOR: "2, 216, 243", BAR_OUTLINE: True, BACKGROUND_IMAGE: background.png }
+    FREQUENCY:
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 222, Y: 182, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "255, 239, 8", BACKGROUND_IMAGE: background.png }
+    TEMPERATURE:
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 222, Y: 204, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+  MEMORY:
+    INTERVAL: 5
+    VIRTUAL:
+      PERCENT_TEXT: { SHOW: True, SHOW_UNIT: True, X: 259, Y: 92, ANCHOR: lt, MIN_SIZE: 0, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 28, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+      GRAPH: { SHOW: True, X: 259, Y: 134, WIDTH: 197, HEIGHT: 10, MIN_VALUE: 0, MAX_VALUE: 100, BAR_COLOR: "2, 216, 243", BAR_OUTLINE: True, BACKGROUND_IMAGE: background.png }
+      USED:  { SHOW: True, SHOW_UNIT: True, X: 457, Y: 82, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "255, 239, 8", BACKGROUND_IMAGE: background.png }
+      TOTAL: { SHOW: True, SHOW_UNIT: True, X: 457, Y: 104, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+  DISK:
+    INTERVAL: 10
+    USED:
+      PERCENT_TEXT: { SHOW: True, SHOW_UNIT: True, X: 259, Y: 192, ANCHOR: lt, MIN_SIZE: 0, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 28, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+      GRAPH: { SHOW: True, X: 259, Y: 234, WIDTH: 197, HEIGHT: 10, MIN_VALUE: 0, MAX_VALUE: 100, BAR_COLOR: "2, 216, 243", BAR_OUTLINE: True, BACKGROUND_IMAGE: background.png }
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 457, Y: 182, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "255, 239, 8", BACKGROUND_IMAGE: background.png }
+    FREE:
+      TEXT:  { SHOW: True, SHOW_UNIT: True, X: 457, Y: 204, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 16, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+  NET:
+    INTERVAL: 1
+    ETH:
+      UPLOAD:
+        TEXT: { SHOW: True, SHOW_UNIT: True, X: 310, Y: 286, ANCHOR: rt, MIN_SIZE: 0, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 12, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+      DOWNLOAD:
+        TEXT: { SHOW: True, SHOW_UNIT: True, X: 466, Y: 286, ANCHOR: rt, MIN_SIZE: 0, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 12, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }
+  DATE:
+    INTERVAL: 1
+    DAY:
+      FORMAT: medium
+      TEXT: { SHOW: True, SHOW_UNIT: True, X: 14, Y: 20, ANCHOR: lt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 22, FONT_COLOR: "255, 239, 8", BACKGROUND_IMAGE: background.png }
+    HOUR:
+      FORMAT: "HH:mm:ss"
+      TEXT: { SHOW: True, SHOW_UNIT: True, X: 462, Y: 18, ANCHOR: rt, FONT: generale-mono/GeneraleMonoA.ttf, FONT_SIZE: 22, FONT_COLOR: "2, 216, 243", BACKGROUND_IMAGE: background.png }

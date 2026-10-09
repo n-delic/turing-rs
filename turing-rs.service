@@ -1,0 +1,12 @@
+# systemd user unit: cp turing-rs.service ~/.config/systemd/user/ && systemctl --user enable --now turing-rs
+[Unit]
+Description=Turing Smart Screen monitor
+After=default.target
+
+[Service]
+ExecStart=%h/.local/bin/turing-rs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
