@@ -1,32 +1,40 @@
 // Turing Smart Screen 3.5" (rev A) system monitor.
 // Protocol ported from turing-smart-screen-python (GPL-3.0).
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod sensors;
 mod theme;
+mod tray;
 
 use ab_glyph::{FontRef, PxScale};
 use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
-use serde::Deserialize;
-use std::path::PathBuf;
-use std::{io::Write, thread, time::Duration};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::{thread, time::Duration};
 
 pub const MONO: &[u8] = include_bytes!("../assets/LiberationMono-Bold.ttf");
 const SANS: &[u8] = include_bytes!("../assets/LiberationSans-Bold.ttf");
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(default)]
 struct Config {
+    #[serde(skip_serializing_if = "Option::is_none")]
     port: Option<String>,
     brightness: u8,
     interval_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     net_interface: Option<String>,
     disk: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     lhm_url: Option<String>,
     accent: String,
     /// Directory containing a turing-smart-screen-python theme.yaml. Unset = built-in dashboard.
+    #[serde(skip_serializing_if = "Option::is_none")]
     theme: Option<PathBuf>,
     /// Python project's res/fonts dir. Default: <theme>/../../fonts
+    #[serde(skip_serializing_if = "Option::is_none")]
     fonts_dir: Option<PathBuf>,
 }
 
@@ -46,13 +54,21 @@ impl Default for Config {
     }
 }
 
+fn config_dir() -> PathBuf {
+    dirs::config_dir().unwrap_or_default().join("turing-rs")
+}
+
+fn config_path() -> PathBuf {
+    std::env::args().nth(1).map(Into::into).unwrap_or_else(|| config_dir().join("config.toml"))
+}
+
 fn load_config() -> Config {
-    let path = std::env::args().nth(1).map(Into::into).or_else(|| {
-        dirs::config_dir().map(|d| d.join("turing-rs").join("config.toml"))
-    });
-    let mut cfg: Config = match path.and_then(|p| std::fs::read_to_string(p).ok()) {
-        Some(s) => toml::from_str(&s).unwrap_or_else(|e| panic!("bad config: {e}")),
-        None => Config::default(),
+    let mut cfg: Config = match std::fs::read_to_string(config_path()) {
+        Ok(s) => toml::from_str(&s).unwrap_or_else(|e| {
+            eprintln!("bad config ({e}), using defaults");
+            Config::default()
+        }),
+        Err(_) => Config::default(),
     };
     for p in [&mut cfg.theme, &mut cfg.fonts_dir].into_iter().flatten() {
         if let (Ok(rest), Some(home)) = (p.strip_prefix("~"), dirs::home_dir()) {
@@ -60,6 +76,56 @@ fn load_config() -> Config {
         }
     }
     cfg
+}
+
+/// ponytail: rewrites the whole file, so comments in config.toml are lost on first tray change.
+fn save_config(cfg: &Config) {
+    let path = config_path();
+    let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
+    if let Err(e) = std::fs::write(&path, toml::to_string_pretty(cfg).unwrap()) {
+        eprintln!("cannot save {}: {e}", path.display());
+    }
+}
+
+/// Theme folders under <config>/themes and the repo's themes/ next to the binary.
+fn list_themes() -> Vec<(String, PathBuf)> {
+    let mut roots = vec![config_dir().join("themes")];
+    if let Ok(exe) = std::env::current_exe() {
+        roots.extend(exe.ancestors().take(4).map(|a| a.join("themes")));
+    }
+    let mut out: Vec<(String, PathBuf)> = Vec::new();
+    for root in roots {
+        for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.join("theme.yaml").is_file() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                if !out.iter().any(|(n, _)| *n == name) {
+                    out.push((name, p));
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Newest mtime across the config file and the theme folder — polled to hot-reload edits.
+fn stamp(theme: Option<&Path>) -> u128 {
+    let mt = |p: &Path| p.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis());
+    let mut s = mt(&config_path());
+    if let Some(dir) = theme {
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            s = s.max(mt(&e.path()));
+        }
+    }
+    s
+}
+
+fn open_folder(p: &Path) {
+    #[cfg(windows)]
+    let _ = std::process::Command::new("explorer").arg(p).spawn();
+    #[cfg(not(windows))]
+    let _ = std::process::Command::new("xdg-open").arg(p).spawn();
 }
 
 fn hex(s: &str) -> Rgb<u8> {
@@ -91,24 +157,40 @@ fn find_port() -> Option<String> {
     })
 }
 
-fn open(cfg: &Config, w: u16, h: u16, landscape: bool) -> Box<dyn serialport::SerialPort> {
-    let port = cfg.port.clone().or_else(find_port).expect("screen not found; set `port` in config");
+fn open(cfg: &Config, w: u16, h: u16, landscape: bool) -> Option<Box<dyn serialport::SerialPort>> {
+    let port = cfg.port.clone().or_else(find_port)?;
     let mut lcd = serialport::new(&port, 115200)
         .timeout(Duration::from_secs(2))
         .flow_control(serialport::FlowControl::Hardware)
         .open()
-        .expect("open serial");
+        .map_err(|e| eprintln!("{port}: {e}"))
+        .ok()?;
     eprintln!("using {port}");
+    setup(lcd.as_mut(), cfg, w, h, landscape);
+    Some(lcd)
+}
+
+fn setup(lcd: &mut dyn serialport::SerialPort, cfg: &Config, w: u16, h: u16, landscape: bool) {
     // orientation (portrait 0 / landscape 2) + 100, then width/height big-endian, padded to 16 bytes
     let mut o = [0u8; 16];
     o[5] = 121;
     o[6] = 100 + if landscape { 2 } else { 0 };
     o[7..9].copy_from_slice(&w.to_be_bytes());
     o[9..11].copy_from_slice(&h.to_be_bytes());
-    lcd.write_all(&o).unwrap();
+    let _ = lcd.write_all(&o);
     // brightness: 0 = brightest, 255 = darkest
-    lcd.write_all(&cmd(255 - (cfg.brightness.min(100) as u16 * 255 / 100), 0, 0, 0, 110)).unwrap();
-    lcd
+    let _ = lcd.write_all(&cmd(255 - (cfg.brightness.min(100) as u16 * 255 / 100), 0, 0, 0, 110));
+}
+
+fn load_theme(cfg: &Config) -> Option<theme::Theme> {
+    let d = cfg.theme.as_ref()?;
+    match theme::Theme::load(d, cfg.fonts_dir.clone()) {
+        Ok(t) => Some(t),
+        Err(e) => {
+            eprintln!("theme {}: {e} — using built-in dashboard", d.display());
+            None
+        }
+    }
 }
 
 fn rgb565(img: &RgbImage, x0: u32, y0: u32, x1: u32, y1: u32, buf: &mut Vec<u8>) {
@@ -255,15 +337,17 @@ fn render(p: &mut Painter, s: &sensors::Stats) {
 }
 
 fn main() {
-    let cfg = load_config();
-    let mut theme = cfg.theme.as_ref().map(|d| {
-        theme::Theme::load(d, cfg.fonts_dir.clone()).unwrap_or_else(|e| panic!("theme: {e}"))
-    });
-    let (w, h, landscape) = match &theme {
+    let mut cfg = load_config();
+    let mut theme = load_theme(&cfg);
+    let dims = |t: &Option<theme::Theme>| match t {
         Some(t) => (t.width as u16, t.height as u16, t.landscape),
         None => (W, H, true),
     };
+    let (mut w, mut h, mut landscape) = dims(&theme);
     let mut lcd = open(&cfg, w, h, landscape);
+    if lcd.is_none() {
+        eprintln!("screen not found; waiting for it (set `port` in config to force one)");
+    }
     let mut sens = sensors::Sensors::new(cfg.net_interface.clone(), cfg.disk.clone(), cfg.lhm_url.clone());
     let mut p = Painter {
         img: RgbImage::new(W as u32, H as u32),
@@ -272,11 +356,54 @@ fn main() {
         accent: hex(&cfg.accent),
     };
     let mut buf = Vec::with_capacity(w as usize * h as usize * 2);
-    let interval = Duration::from_millis(cfg.interval_ms.max(200));
     let snapshot = std::env::var("TURING_PNG").ok(); // debug: also write each frame here
     let mut prev: Option<RgbImage> = None;
+    let mut last_stamp = stamp(cfg.theme.as_deref());
+
+    let (tx, rx) = mpsc::channel();
+    tray::start(list_themes(), cfg.theme.clone(), cfg.brightness, tx);
 
     loop {
+        // tray commands + hot reload when config.toml or the theme folder changes on disk
+        let mut reload = false;
+        for c in rx.try_iter() {
+            match c {
+                tray::Cmd::Brightness(b) => {
+                    cfg.brightness = b;
+                    save_config(&cfg);
+                    if let Some(l) = lcd.as_mut() {
+                        setup(l.as_mut(), &cfg, w, h, landscape);
+                    }
+                }
+                tray::Cmd::Theme(t) => {
+                    cfg.theme = t;
+                    save_config(&cfg);
+                    reload = true;
+                }
+                tray::Cmd::OpenConfig => open_folder(&config_dir()),
+                tray::Cmd::Reload => reload = true,
+                tray::Cmd::Quit => std::process::exit(0),
+            }
+        }
+        let now_stamp = stamp(cfg.theme.as_deref());
+        if now_stamp != last_stamp {
+            last_stamp = now_stamp;
+            reload = true;
+        }
+        if reload {
+            cfg = load_config();
+            theme = load_theme(&cfg);
+            (w, h, landscape) = dims(&theme);
+            if let Some(l) = lcd.as_mut() {
+                setup(l.as_mut(), &cfg, w, h, landscape);
+            }
+            sens = sensors::Sensors::new(cfg.net_interface.clone(), cfg.disk.clone(), cfg.lhm_url.clone());
+            p.accent = hex(&cfg.accent);
+            prev = None;
+            last_stamp = stamp(cfg.theme.as_deref());
+        }
+        let interval = Duration::from_millis(cfg.interval_ms.max(200));
+
         let stats = sens.read();
         let frame = match theme.as_mut() {
             Some(t) => t.render(&stats),
@@ -288,14 +415,16 @@ fn main() {
         if let Some(path) = &snapshot {
             let _ = frame.save(path);
         }
-        if let Err(e) = push(lcd.as_mut(), &frame, prev.as_ref(), &mut buf) {
-            // screen unplugged / reset: retry until it comes back, then repaint everything
-            eprintln!("write failed ({e}), reconnecting...");
+        // no screen yet, or it was unplugged/reset: keep polling for it, repaint fully once it returns
+        let Some(l) = lcd.as_mut() else {
+            lcd = open(&cfg, w, h, landscape);
             prev = None;
             thread::sleep(Duration::from_secs(3));
-            if let Ok(l) = std::panic::catch_unwind(|| open(&cfg, w, h, landscape)) {
-                lcd = l;
-            }
+            continue;
+        };
+        if let Err(e) = push(l.as_mut(), &frame, prev.as_ref(), &mut buf) {
+            eprintln!("write failed ({e}), reconnecting...");
+            lcd = None;
             continue;
         }
         prev = Some(frame);
