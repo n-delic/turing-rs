@@ -1,61 +1,50 @@
-// Settings window (egui): live preview + a form bound to Config. Every edit is saved to
-// config.toml; the render loop's hot reload picks it up, so the GUI never touches the screen directly.
-use crate::{config_dir, hex, list_themes, load_config, open_folder, save_config, Config, Shared};
+// Settings window (egui), run as its own process (`turing-rs --settings`): a form bound to Config,
+// saved to config.toml on every edit (the main process hot-reloads it), plus a live preview read
+// from <config>/preview.png, which the main process writes while <config>/preview.want is fresh.
+use crate::{config_dir, hex, list_themes, load_config, open_folder, save_config, Config};
 use eframe::egui;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::time::{Instant, SystemTime};
 
 pub struct App {
     cfg: Config,
     themes: Vec<(String, PathBuf)>,
-    shared: Arc<Mutex<Shared>>,
     tex: Option<egui::TextureHandle>,
-    seq: u64,
+    seen: Option<SystemTime>,
+    touched: Instant,
     dirty: bool,
 }
 
-pub fn run(shared: Arc<Mutex<Shared>>, start_visible: bool) {
+pub fn run() {
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).ok();
-    let mut viewport = egui::ViewportBuilder::default().with_inner_size([860.0, 420.0]).with_app_id("turing-rs").with_visible(start_visible);
+    let mut viewport = egui::ViewportBuilder::default().with_inner_size([860.0, 420.0]).with_app_id("turing-rs");
     if let Some(i) = icon {
         viewport = viewport.with_icon(i);
     }
     let opts = eframe::NativeOptions { viewport, ..Default::default() };
-    let app = App { cfg: load_config(), themes: list_themes(), shared: shared.clone(), tex: None, seq: 0, dirty: false };
-    let _ = eframe::run_native(
-        "turing-rs",
-        opts,
-        Box::new(move |cc| {
-            shared.lock().unwrap().ctx = Some(cc.egui_ctx.clone());
-            Ok(Box::new(app))
-        }),
-    );
-    std::process::exit(0);
+    let app = App { cfg: load_config(), themes: list_themes(), tex: None, seen: None, touched: Instant::now() - std::time::Duration::from_secs(10), dirty: false };
+    let _ = eframe::run_native("turing-rs", opts, Box::new(|_| Ok(Box::new(app))));
+    let _ = std::fs::remove_file(config_dir().join("preview.want"));
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
-        // Closing the window hides it; the tray brings it back (or quits).
-        if ctx.input(|i| i.viewport().close_requested()) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        // keep asking the main process for frames, and pick up new ones
+        if self.touched.elapsed().as_secs() >= 2 {
+            self.touched = Instant::now();
+            let _ = std::fs::write(config_dir().join("preview.want"), b"");
         }
-        {
-            let mut sh = self.shared.lock().unwrap();
-            if sh.show {
-                sh.show = false;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            }
-            if sh.seq != self.seq {
-                if let Some(f) = &sh.frame {
-                    let img = egui::ColorImage::from_rgb([f.width() as usize, f.height() as usize], f.as_raw());
-                    match &mut self.tex {
-                        Some(t) => t.set(img, egui::TextureOptions::LINEAR),
-                        None => self.tex = Some(ctx.load_texture("preview", img, egui::TextureOptions::LINEAR)),
-                    }
+        let png = config_dir().join("preview.png");
+        let mtime = png.metadata().and_then(|m| m.modified()).ok();
+        if mtime.is_some() && mtime != self.seen {
+            if let Ok(f) = image::open(&png) {
+                let f = f.to_rgb8();
+                let img = egui::ColorImage::from_rgb([f.width() as usize, f.height() as usize], f.as_raw());
+                match &mut self.tex {
+                    Some(t) => t.set(img, egui::TextureOptions::LINEAR),
+                    None => self.tex = Some(ctx.load_texture("preview", img, egui::TextureOptions::LINEAR)),
                 }
-                self.seq = sh.seq;
+                self.seen = mtime;
             }
         }
 

@@ -12,7 +12,7 @@ use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc;
 use std::{thread, time::Duration};
 
 pub const MONO: &[u8] = include_bytes!("../assets/LiberationMono-Bold.ttf");
@@ -55,13 +55,24 @@ impl Default for Config {
     }
 }
 
-/// State shared between the render loop and the settings window.
-#[derive(Default)]
-pub struct Shared {
-    pub frame: Option<RgbImage>,
-    pub seq: u64,
-    pub show: bool,
-    pub ctx: Option<eframe::egui::Context>,
+/// The settings window is a separate process; it touches `preview.want` while open and
+/// the render loop writes `preview.png` for it as long as that file is fresh.
+fn preview_wanted() -> bool {
+    std::fs::metadata(config_dir().join("preview.want"))
+        .and_then(|m| m.modified())
+        .map_or(false, |t| t.elapsed().map_or(false, |d| d.as_secs() < 5))
+}
+
+/// Spawn (or just focus by re-spawning) the settings window process.
+fn spawn_settings(child: &mut Option<std::process::Child>) {
+    if let Some(c) = child {
+        if matches!(c.try_wait(), Ok(None)) {
+            return; // still open
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        *child = std::process::Command::new(exe).arg("--settings").spawn().ok();
+    }
 }
 
 fn config_dir() -> PathBuf {
@@ -347,14 +358,14 @@ fn render(p: &mut Painter, s: &sensors::Stats) {
 }
 
 fn main() {
-    let shared = Arc::new(Mutex::new(Shared::default()));
-    let s2 = shared.clone();
-    thread::spawn(move || run_loop(s2));
-    // window starts hidden when launched with --tray (e.g. from the systemd unit / autostart)
-    gui::run(shared, !std::env::args().any(|a| a == "--tray"));
-}
-
-fn run_loop(shared: Arc<Mutex<Shared>>) {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--settings") {
+        return gui::run();
+    }
+    let mut settings: Option<std::process::Child> = None;
+    if !args.iter().any(|a| a == "--tray") {
+        spawn_settings(&mut settings); // plain launch: show the window; --tray (service/autostart) stays quiet
+    }
     let mut cfg = load_config();
     let mut theme = load_theme(&cfg);
     let dims = |t: &Option<theme::Theme>| match t {
@@ -399,13 +410,7 @@ fn run_loop(shared: Arc<Mutex<Shared>>) {
                     reload = true;
                 }
                 tray::Cmd::OpenConfig => open_folder(&config_dir()),
-                tray::Cmd::Settings => {
-                    let mut sh = shared.lock().unwrap();
-                    sh.show = true;
-                    if let Some(c) = &sh.ctx {
-                        c.request_repaint();
-                    }
-                }
+                tray::Cmd::Settings => spawn_settings(&mut settings),
                 tray::Cmd::Reload => reload = true,
                 tray::Cmd::Quit => std::process::exit(0),
             }
@@ -440,10 +445,11 @@ fn run_loop(shared: Arc<Mutex<Shared>>) {
         if let Some(path) = &snapshot {
             let _ = frame.save(path);
         }
-        {
-            let mut sh = shared.lock().unwrap();
-            sh.frame = Some(frame.clone());
-            sh.seq += 1;
+        if preview_wanted() {
+            let tmp = config_dir().join("preview.tmp");
+            if frame.save_with_format(&tmp, image::ImageFormat::Png).is_ok() {
+                let _ = std::fs::rename(tmp, config_dir().join("preview.png"));
+            }
         }
         // no screen yet, or it was unplugged/reset: keep polling for it, repaint fully once it returns
         let Some(l) = lcd.as_mut() else {

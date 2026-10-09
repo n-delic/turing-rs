@@ -33,7 +33,7 @@ Windows: run LibreHardwareMonitor with *Options → Remote Web Server* enabled; 
 
 ## GUI and tray
 
-Launching `turing-rs` opens a settings window: live preview of the screen, theme picker, brightness, refresh rate, accent colour, serial port, network interface, disk and LibreHardwareMonitor URL. Closing the window hides it; the tray icon (click, or *Settings…*) brings it back. `turing-rs --tray` starts hidden — the systemd unit uses that.
+Launching `turing-rs` opens a settings window: live preview of the screen, theme picker, brightness, refresh rate, accent colour, serial port, network interface, disk and LibreHardwareMonitor URL. The window is a separate process (`turing-rs --settings`); close it whenever you like and reopen it from the tray icon (click, or *Settings…*). `turing-rs --tray` starts without the window — the systemd unit uses that.
 
 The app lives in the system tray. *Theme* lists every folder with a `theme.yaml` under `~/.config/turing-rs/themes/` (or `%APPDATA%\turing-rs\themes\`) and the `themes/` folder next to the binary. Picking one, or a brightness, is written back to `config.toml`.
 
