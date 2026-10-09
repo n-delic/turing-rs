@@ -1,6 +1,6 @@
 [package]
 name = "turing-rs"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 description = "Standalone system monitor for the Turing Smart Screen 3.5\" (rev A)"
