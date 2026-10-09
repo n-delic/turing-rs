@@ -4,6 +4,7 @@
 mod sensors;
 mod theme;
 mod tray;
+mod gui;
 
 use ab_glyph::{FontRef, PxScale};
 use image::{Rgb, RgbImage};
@@ -11,7 +12,7 @@ use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::{thread, time::Duration};
 
 pub const MONO: &[u8] = include_bytes!("../assets/LiberationMono-Bold.ttf");
@@ -54,12 +55,21 @@ impl Default for Config {
     }
 }
 
+/// State shared between the render loop and the settings window.
+#[derive(Default)]
+pub struct Shared {
+    pub frame: Option<RgbImage>,
+    pub seq: u64,
+    pub show: bool,
+    pub ctx: Option<eframe::egui::Context>,
+}
+
 fn config_dir() -> PathBuf {
     dirs::config_dir().unwrap_or_default().join("turing-rs")
 }
 
 fn config_path() -> PathBuf {
-    std::env::args().nth(1).map(Into::into).unwrap_or_else(|| config_dir().join("config.toml"))
+    std::env::args().skip(1).find(|a| !a.starts_with("--")).map(Into::into).unwrap_or_else(|| config_dir().join("config.toml"))
 }
 
 fn load_config() -> Config {
@@ -337,6 +347,14 @@ fn render(p: &mut Painter, s: &sensors::Stats) {
 }
 
 fn main() {
+    let shared = Arc::new(Mutex::new(Shared::default()));
+    let s2 = shared.clone();
+    thread::spawn(move || run_loop(s2));
+    // window starts hidden when launched with --tray (e.g. from the systemd unit / autostart)
+    gui::run(shared, !std::env::args().any(|a| a == "--tray"));
+}
+
+fn run_loop(shared: Arc<Mutex<Shared>>) {
     let mut cfg = load_config();
     let mut theme = load_theme(&cfg);
     let dims = |t: &Option<theme::Theme>| match t {
@@ -381,6 +399,13 @@ fn main() {
                     reload = true;
                 }
                 tray::Cmd::OpenConfig => open_folder(&config_dir()),
+                tray::Cmd::Settings => {
+                    let mut sh = shared.lock().unwrap();
+                    sh.show = true;
+                    if let Some(c) = &sh.ctx {
+                        c.request_repaint();
+                    }
+                }
                 tray::Cmd::Reload => reload = true,
                 tray::Cmd::Quit => std::process::exit(0),
             }
@@ -414,6 +439,11 @@ fn main() {
         };
         if let Some(path) = &snapshot {
             let _ = frame.save(path);
+        }
+        {
+            let mut sh = shared.lock().unwrap();
+            sh.frame = Some(frame.clone());
+            sh.seq += 1;
         }
         // no screen yet, or it was unplugged/reset: keep polling for it, repaint fully once it returns
         let Some(l) = lcd.as_mut() else {

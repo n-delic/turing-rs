@@ -4,7 +4,7 @@ Description=Turing Smart Screen monitor
 After=default.target
 
 [Service]
-ExecStart=%h/.local/bin/turing-rs
+ExecStart=%h/.local/bin/turing-rs --tray
 Restart=always
 RestartSec=5
 

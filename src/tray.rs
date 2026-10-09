@@ -8,6 +8,7 @@ use trayicon::{MenuBuilder, TrayIconBuilder};
 pub enum Cmd {
     Brightness(u8),
     Theme(Option<PathBuf>),
+    Settings,
     OpenConfig,
     Reload,
     Quit,
@@ -31,11 +32,14 @@ pub fn start(themes: Vec<(String, PathBuf)>, current: Option<PathBuf>, brightnes
             .submenu("Theme", tm)
             .submenu("Brightness", bm)
             .separator()
+            .item("Settings…", Cmd::Settings)
             .item("Open config folder", Cmd::OpenConfig)
             .item("Reload", Cmd::Reload)
             .separator()
             .item("Quit", Cmd::Quit);
         let tray = TrayIconBuilder::new()
+            .on_click(Cmd::Settings)
+            .on_double_click(Cmd::Settings)
             .sender(move |c: &Cmd| {
                 let _ = tx.send(c.clone());
             })
